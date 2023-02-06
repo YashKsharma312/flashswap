@@ -21,6 +21,9 @@ await MyToken1.deployed();
 const Token2 = await ethers.getContractFactory("MyToken2");
 MyToken2 = await Token2.deploy();
 await MyToken2.deployed();
+const Token3 = await ethers.getContractFactory("MyToken3");
+MyToken3 = await Token3.deploy();
+await MyToken3.deployed();
 const factory = await ethers.getContractFactory("UniswapV2Factory");
 FactoryContract = await factory.deploy(owner.address);
 await FactoryContract.deployed();
@@ -37,42 +40,55 @@ const UniswapV2 = await ethers.getContractFactory("UniswapV2Router02");
 UniswapV2Contract = await UniswapV2.deploy(FactoryContract.address,WethContract.address);
 await UniswapV2Contract.deployed();
 const UniswapV2flash = await ethers.getContractFactory("Flashswap");
-UniswapV2flashContract = await UniswapV2flash.deploy(MyToken2.address,FactoryContract.address);
+UniswapV2flashContract = await UniswapV2flash.deploy(MyToken2.address,MyToken3.address,FactoryContract.address,UniswapV2Contract.address);
 await UniswapV2flashContract.deployed();
 })
 it("adding liquidity", async function () {
   await MyToken1.mint(owner.address,100000);
   await MyToken2.mint(owner.address,100000);
+  await MyToken3.mint(owner.address,100000);
   expect(await MyToken1.balanceOf(owner.address)).to.equal(100000);
   expect(await MyToken2.balanceOf(owner.address)).to.equal(100000);
+  expect(await MyToken3.balanceOf(owner.address)).to.equal(100000);
   await MyToken1.approve(UniswapV2Contract.address, 100000);
   await MyToken2.approve(UniswapV2Contract.address, 100000);
+  await MyToken3.approve(UniswapV2Contract.address, 100000);
   await UniswapV2Contract.addLiquidity(
     MyToken1.address,
     MyToken2.address,
     10000,
-    15000,
-    900,
-    1400,
+    10000,
+    1,
+    1,
     owner.address,
     1769900000
   );
-  expect(await MyToken1.balanceOf(owner.address)).to.equal(100000 - 10000);
-  expect(await MyToken2.balanceOf(owner.address)).to.equal(100000 - 15000);
-  await UniswapV2Contract.swapExactTokensForTokens(
-    900,
-    1000,
-    [MyToken1.address,MyToken2.address],
+  await UniswapV2Contract.addLiquidity(
+    MyToken1.address,
+    MyToken3.address,
+    10000,
+    20000,
+    1,
+    1,
     owner.address,
-    1769000000
+    1769900000
   );
-  expect(await MyToken1.balanceOf(owner.address)).to.lessThan(100000 - 10000);
-  expect(await MyToken2.balanceOf(owner.address)).to.greaterThan(100000 - 15000);
+  await UniswapV2Contract.addLiquidity(
+    MyToken2.address,
+    MyToken3.address,
+    10000,
+    5000,
+    1,
+    1,
+    owner.address,
+    1769900000
+  );
+  expect(await MyToken1.balanceOf(owner.address)).to.equal(100000-20000);
+  expect(await MyToken2.balanceOf(owner.address)).to.equal(100000-20000);
+  expect(await MyToken3.balanceOf(owner.address)).to.equal(100000-25000);
 
-  const fee = Math.round(((100 * 3) / 997)) + 1;
-  await MyToken1.transfer(UniswapV2flashContract.address, fee);
-  await UniswapV2flashContract.testFlashSwap(MyToken1.address, 100);
-  const flashswapBalance = await MyToken1.balanceOf(UniswapV2flashContract.address);
-  expect(flashswapBalance.eq(BigNumber.from("0"))).to.be.true;
+   await UniswapV2flashContract.testFlashSwap(MyToken1.address, 100);
+   expect(await MyToken2.balanceOf(UniswapV2flashContract.address)).to.equal(274);
+
 });
 })
